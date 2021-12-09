@@ -4,9 +4,8 @@ from pydantic import BaseModel, validator
 
 from fastapi import APIRouter, Depends, status
 
-from app.utils.basic_auth import check_basic_auth
-from app.utils.hash_pass import hash_password
-from app.credentials_storge import auth_storage
+from app.basic_auth import check_basic_auth, hash_password
+from app.basic_auth import auth_storage
 
 auth_router = APIRouter(tags=['Basic Auth'])
 

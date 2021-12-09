@@ -2,3 +2,6 @@ FastAPI
 uvicorn
 python-multipart
 pydantic[dotenv]
+pytest
+requests
+SQLAlchemy

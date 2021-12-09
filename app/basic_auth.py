@@ -1,11 +1,17 @@
-"""This module provides Basic Auth dependency for end points"""
+"""
+This module provides Basic Auth dependency for endpoints.
+Storage lives in memory during runtime, so it makes this app stateful
+"""
+from hashlib import sha1
 
-
+from app.settings import config
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from app.utils.hash_pass import hash_password
-from app.credentials_storge import auth_storage
+
+def hash_password(password: str) -> str:
+    return sha1(f"{config.SECRET_KEY}{password}".encode('utf-8')).hexdigest()
+
 
 security = HTTPBasic()
 
@@ -26,3 +32,6 @@ async def check_basic_auth(credentials: HTTPBasicCredentials = Depends(security)
             headers={"WWW-Authenticate": "Basic"},
         )
     return True
+
+
+auth_storage = {config.ADMIN_NAME: hash_password(config.ADMIN_PASSWORD)}

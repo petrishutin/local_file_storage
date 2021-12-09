@@ -1,22 +1,53 @@
 from time import time
-
-from fastapi import APIRouter, UploadFile, File, Depends
-
 from hashlib import sha1
 
-from app.utils.basic_auth import check_basic_auth
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
+from app.basic_auth import check_basic_auth
+from app.db.database import SessionLocal
+from app.db.db_utils import select_file_data, insert_file_data
+from app.db.models import FileMetaData
+from app.settings import config
 
 file_router = APIRouter(tags=['File CRUD'])
 
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 @file_router.get('/download/{file_hash}')
-async def read_file(file_hash: str, auth: bool = Depends(check_basic_auth)):  # noqa
-    return "downloading"
+async def read_file(file_hash: str, db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth)):  # noqa
+    file_meta: FileMetaData = select_file_data(db, hash_name=file_hash)
+    if not file_meta:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'file {file_hash} not found')
+    return FileResponse(
+        f'{config.BASE_DIR}/storage/{file_hash}.{file_meta.extension}', filename=f"{file_hash}.{file_meta.extension}"
+    )
 
 
 @file_router.post('/upload', response_model=str)
-async def upload_file(uploaded_file: UploadFile = File(...), auth: bool = Depends(check_basic_auth)):  # noqa
+async def upload_file(
+        uploaded_file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        auth: bool = Depends(check_basic_auth)  # noqa
+):
+    split_file_name = uploaded_file.filename.rsplit('.')
+    extension = split_file_name[1] if len(split_file_name) > 1 else None
+    if not extension:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='file name must have extension')
     hash_name = sha1(f"{time()}{uploaded_file.filename}".encode('utf-8')).hexdigest()
+    bucket = hash_name[:2]
+    insert_file_data(db, hash_name, extension, bucket)
+    file_data: bytes = uploaded_file.file.read()
+    with open(f'{config.BASE_DIR}/storage/{hash_name}.{extension}', 'wb') as f:
+        f.write(file_data)
     return hash_name
 
 
