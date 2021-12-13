@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.basic_auth import check_basic_auth
 from app.db.database import SessionLocal
-from app.db.db_utils import select_file_data, insert_file_data
+from app.db.db_utils import select_file_data, insert_file_data, delete_file_record
 from app.db.models import FileMetaData
 from app.settings import config
 from app.service_logger import logger
@@ -26,7 +26,7 @@ def get_db():
 
 @file_router.get('/download/{file_hash}')
 async def read_file(file_hash: str, db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth)):  # noqa
-    file_meta: FileMetaData = select_file_data(db, hash_name=file_hash)
+    file_meta: FileMetaData = select_file_data(db, file_hash=file_hash)
     if not file_meta:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'file {file_hash} not found')
     bucket = file_hash[:2]
@@ -61,10 +61,17 @@ async def upload_file(
 
 
 @file_router.put('/update/{file_hash}')
-async def update_file(auth: bool = Depends(check_basic_auth)):
+async def update_file(db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth)):
     return "updated"
 
 
-@file_router.delete('/delete')
-async def delete_file(auth: bool = Depends(check_basic_auth)):
-    return "deleted"
+@file_router.delete('/delete/{file_hash}')
+async def delete_file(
+        file_hash: str, db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth),  # noqa
+):
+    file = select_file_data(db, file_hash)
+    if not file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='file not found')
+    delete_file_record(db, file_hash)
+    os.remove(f'{config.BASE_DIR}/storage/{file.bucket}/{file_hash}.{file.extension}')
+    return f"file {file_hash} deleted"
