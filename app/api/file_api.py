@@ -1,14 +1,17 @@
 import os
+import inspect
 from time import time
 from hashlib import sha1
+from typing import Type
 
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.basic_auth import check_basic_auth
 from app.db.database import SessionLocal
-from app.db.db_utils import select_file_data, insert_file_data, delete_file_record
+from app.db.db_utils import select_file_data, insert_file_meta, delete_file_record, update_file_extension
 from app.db.models import FileMetaData
 from app.settings import config
 from app.service_logger import logger
@@ -24,8 +27,32 @@ def get_db():
         db.close()
 
 
+def as_form(cls: Type[BaseModel]):
+    """
+    Adds an as_form class method to decorated models. The as_form class method
+    can be used with FastAPI endpoints
+    """
+    new_params = [
+        inspect.Parameter(
+            field.alias,
+            inspect.Parameter.POSITIONAL_ONLY,
+            default=(Form(field.default) if not field.required else Form(...)),
+        )
+        for field in cls.__fields__.values()
+    ]
+
+    async def _as_form(**data):
+        return cls(**data)
+
+    sig = inspect.signature(_as_form)
+    sig = sig.replace(parameters=new_params)
+    _as_form.__signature__ = sig
+    setattr(cls, "as_form", _as_form)
+    return cls
+
+
 @file_router.get('/download/{file_hash}')
-async def read_file(file_hash: str, db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth)):  # noqa
+async def download_file(file_hash: str, db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth)):  # noqa
     file_meta: FileMetaData = select_file_data(db, file_hash=file_hash)
     if not file_meta:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'file {file_hash} not found')
@@ -49,7 +76,7 @@ async def upload_file(
     file_hash = sha1(f"{time()}{uploaded_file.filename}".encode('utf-8')).hexdigest()
     bucket = file_hash[:2]
     try:
-        insert_file_data(db, file_hash, extension, bucket)
+        insert_file_meta(db, file_hash, extension, bucket)
     except Exception as e:
         logger.log(e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='can not save file')
@@ -60,18 +87,39 @@ async def upload_file(
     return file_hash
 
 
-@file_router.put('/update/{file_hash}')
-async def update_file(db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth)):
-    return "updated"
+@as_form
+class UpdateFileForm(BaseModel):
+    file_hash: str
+
+
+@file_router.put('/update/')
+async def update_file(
+        uploaded_file: UploadFile = File(...),
+        file_hash: UpdateFileForm = Depends(UpdateFileForm.as_form),
+        db: Session = Depends(get_db),
+        auth: bool = Depends(check_basic_auth)  # noqa
+):
+    file_hash = file_hash.file_hash
+    file_meta = select_file_data(db, file_hash)
+    if not file_meta:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='file not found')
+    split_file_name = uploaded_file.filename.rsplit('.')
+    new_extension = split_file_name[1] if len(split_file_name) > 1 else None
+    if new_extension != file_meta.extension:
+        update_file_extension(db, file_hash, new_extension)
+    file_data: bytes = uploaded_file.file.read()
+    with open(f'{config.BASE_DIR}/storage/{file_meta.bucket}/{file_hash}.{new_extension}', 'wb') as f:
+        f.write(file_data)
+    return f"file {file_hash} successfully updated"
 
 
 @file_router.delete('/delete/{file_hash}')
 async def delete_file(
         file_hash: str, db: Session = Depends(get_db), auth: bool = Depends(check_basic_auth),  # noqa
 ):
-    file = select_file_data(db, file_hash)
-    if not file:
+    file_meta = select_file_data(db, file_hash)
+    if not file_meta:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='file not found')
     delete_file_record(db, file_hash)
-    os.remove(f'{config.BASE_DIR}/storage/{file.bucket}/{file_hash}.{file.extension}')
-    return f"file {file_hash} deleted"
+    os.remove(f'{config.BASE_DIR}/storage/{file_meta.bucket}/{file_hash}.{file_meta.extension}')
+    return f"file {file_hash} successfully deleted"

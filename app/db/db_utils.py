@@ -7,7 +7,7 @@ def select_file_data(db: Session, file_hash: str):
     return db.query(FileMetaData).filter(FileMetaData.hash_name == file_hash).first()
 
 
-def insert_file_data(db: Session, file_hash: str, extension: str, bucket: str):
+def insert_file_meta(db: Session, file_hash: str, extension: str, bucket: str):
     new_file = FileMetaData(hash_name=file_hash, extension=extension, bucket=bucket)
     db.add(new_file)
     db.commit()
