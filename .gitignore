@@ -1,5 +1,6 @@
 venv
-database.db
+*.db
+*/*.db
 app/storage/*
 
 __pycache__
