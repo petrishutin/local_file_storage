@@ -1,3 +1,4 @@
+import os
 from time import time
 from hashlib import sha1
 
@@ -10,6 +11,7 @@ from app.db.database import SessionLocal
 from app.db.db_utils import select_file_data, insert_file_data
 from app.db.models import FileMetaData
 from app.settings import config
+from app.service_logger import logger
 
 file_router = APIRouter(tags=['File CRUD'])
 
@@ -27,8 +29,10 @@ async def read_file(file_hash: str, db: Session = Depends(get_db), auth: bool = 
     file_meta: FileMetaData = select_file_data(db, hash_name=file_hash)
     if not file_meta:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'file {file_hash} not found')
+    bucket = file_hash[:2]
     return FileResponse(
-        f'{config.BASE_DIR}/storage/{file_hash}.{file_meta.extension}', filename=f"{file_hash}.{file_meta.extension}"
+        f'{config.BASE_DIR}/storage/{bucket}/{file_hash}.{file_meta.extension}',
+        filename=f"{file_hash}.{file_meta.extension}"
     )
 
 
@@ -42,13 +46,18 @@ async def upload_file(
     extension = split_file_name[1] if len(split_file_name) > 1 else None
     if not extension:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='file name must have extension')
-    hash_name = sha1(f"{time()}{uploaded_file.filename}".encode('utf-8')).hexdigest()
-    bucket = hash_name[:2]
-    insert_file_data(db, hash_name, extension, bucket)
+    file_hash = sha1(f"{time()}{uploaded_file.filename}".encode('utf-8')).hexdigest()
+    bucket = file_hash[:2]
+    try:
+        insert_file_data(db, file_hash, extension, bucket)
+    except Exception as e:
+        logger.log(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='can not save file')
     file_data: bytes = uploaded_file.file.read()
-    with open(f'{config.BASE_DIR}/storage/{hash_name}.{extension}', 'wb') as f:
+    os.makedirs(f'{config.BASE_DIR}/storage/{bucket}', exist_ok=True)
+    with open(f'{config.BASE_DIR}/storage/{bucket}/{file_hash}.{extension}', 'wb') as f:
         f.write(file_data)
-    return hash_name
+    return file_hash
 
 
 @file_router.put('/update/{file_hash}')
