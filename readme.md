@@ -2,7 +2,7 @@
 
 Local_file_storage provides file CRUD API. Files are stored in container locale storage.
 
-_Basic auth are required (by default USER=admin PASSWORD=admin)_
+_Basic auth are required (by default STORAGE_USER=admin PASSWORD=admin)_
 
 ###Tech
 - FastAPI
@@ -15,6 +15,5 @@ _Basic auth are required (by default USER=admin PASSWORD=admin)_
 ### Useful commands
 
 - run service locally in docker container: `make run`
-- run as a daemon (release terminal after app start): `run_daemon`
 - run tests: `make tests`
 - remove container: `make remove`

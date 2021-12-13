@@ -34,4 +34,4 @@ async def check_basic_auth(credentials: HTTPBasicCredentials = Depends(security)
     return True
 
 
-auth_storage = {config.ADMIN_NAME: hash_password(config.ADMIN_PASSWORD)}
+auth_storage = {config.STORAGE_USER: hash_password(config.PASSWORD)}

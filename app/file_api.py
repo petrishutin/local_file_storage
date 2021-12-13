@@ -63,7 +63,7 @@ async def download_file(file_hash: str, db: Session = Depends(get_db), auth: boo
     )
 
 
-@file_router.post('/upload', response_model=str)
+@file_router.post('/upload', status_code=201, response_model=str)
 async def upload_file(
         uploaded_file: UploadFile = File(...),
         db: Session = Depends(get_db),
@@ -102,7 +102,7 @@ async def update_file(
     file_hash = file_hash.file_hash
     file_meta = select_file_data(db, file_hash)
     if not file_meta:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='file not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'file {file_hash} not found')
     split_file_name = uploaded_file.filename.rsplit('.')
     new_extension = split_file_name[1] if len(split_file_name) > 1 else None
     if new_extension != file_meta.extension:
@@ -119,7 +119,7 @@ async def delete_file(
 ):
     file_meta = select_file_data(db, file_hash)
     if not file_meta:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='file not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'file {file_hash} not found')
     delete_file_record(db, file_hash)
     os.remove(f'{config.BASE_DIR}/storage/{file_meta.bucket}/{file_hash}.{file_meta.extension}')
     return f"file {file_hash} successfully deleted"

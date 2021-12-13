@@ -14,7 +14,7 @@ notes = sqlalchemy.Table(
 )
 
 engine = sqlalchemy.create_engine(
-    config.DATABASE_URL, connect_args={"check_same_thread": False}
+    config.DB_URL, connect_args={"check_same_thread": False}
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
