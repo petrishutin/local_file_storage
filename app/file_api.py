@@ -10,9 +10,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.basic_auth import check_basic_auth
-from app.db.database import SessionLocal
-from app.db.db_utils import select_file_data, insert_file_meta, delete_file_record, update_file_extension
-from app.db.models import FileMetaData
+from app.db import SessionLocal
+from app.db import select_file_data, insert_file_meta, delete_file_record, update_file_extension
+from app.db import FileMetaData
 from app.settings import config
 from app.service_logger import logger
 

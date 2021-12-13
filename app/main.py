@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 
 from app.file_api import file_router
-from app.db.database import init_db
+from app.db import init_db
 from app.settings import config
 
 app = FastAPI(title="File storage")

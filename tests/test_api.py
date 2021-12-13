@@ -22,13 +22,13 @@ def basic_auth():
 
 @pytest.fixture(scope='module')
 def txt_file():
-    with open("test.txt", "rb") as txt_file:
+    with open(f"{config.BASE_DIR}/../tests/test.txt", "rb") as txt_file:
         yield txt_file
 
 
 @pytest.fixture(scope='module')
 def odt_file():
-    with open("test.odt", "rb") as odt_file:
+    with open(f"{config.BASE_DIR}/../tests/test.odt", "rb") as odt_file:
         yield odt_file
 
 
